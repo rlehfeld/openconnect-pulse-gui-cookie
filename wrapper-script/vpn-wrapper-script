@@ -9,7 +9,7 @@
 #
 # See `https://github.com/hardcodes/openconnect-pulse-gui-cookie.git`
 #
-# 2024 - Sven Putze (hardcodes)
+# 2024,2025 - Sven Putze (hardcodes)
 #################################################################################
 #
 # Username for VPN connection, defaults to $USER if empty
@@ -23,7 +23,10 @@ PULSE_GUI_SCRIPT="openconnect_pulse_gui.py"
 # Path/filename for PID file, directory will be created if it does not exist
 PID_FILE="${HOME}/.var/run/openconnect.pid"
 # Path to the openconnect command
-OPENCONNECT=$(which openconnect) 
+OPENCONNECT=$(which openconnect)
+# Protocol to use for openconnect
+# One out of nc, pulse, gp, f5, fortinet, array
+PROTOCOL="nc"
 
 yell() { echo "$0: $*" >&2; }
 die() { yell "$*"; exit 111; }
@@ -80,7 +83,7 @@ if test -f "${PID_FILE}";then
 	fi
 else
 	SSO_LOGIN_COOKIE=$(python3 ${PULSE_GUI_SCRIPT} ${VPN_URL})
-	try sudo -p "sudo (openconnect): " ${OPENCONNECT} --background --pid-file="${PID_FILE}" ${VPNC_SCRIPT} --protocol=nc --user=${VPN_USER} --setuid=${USER} --cookie="${SSO_LOGIN_COOKIE}" ${VPN_URL}
+	try sudo -p "sudo (openconnect): " ${OPENCONNECT} --background --pid-file="${PID_FILE}" ${VPNC_SCRIPT} --protocol="${PROTOCOL}" --user=${VPN_USER} --setuid=${USER} --cookie="${SSO_LOGIN_COOKIE}" ${VPN_URL}
         # for UMASK 027
 	try sudo chown root:${USER} ${PID_FILE}
 fi
