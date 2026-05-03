@@ -22,7 +22,7 @@ except ImportError:
     from urlparse import urlparse, urlunparse
 
 gi.require_version("Gtk", "3.0")
-gi.require_version("WebKit2", "4.0")
+gi.require_version("WebKit2", "4.1")
 from gi.repository import Gtk, WebKit2, GLib
 
 log = logging.getLogger("pulsegui")
@@ -168,17 +168,8 @@ class PulseLoginView:
         cookies = source_object.get_cookies_finish(res)
         # print(uri)
         for cookie in cookies:
-            #            print(
-            #                " ",
-            #                cookie.name,
-            #                cookie.value,
-            #                cookie.domain,
-            #                cookie.path,
-            #                cookie.expires,
-            #                cookie.secure,
-            #                cookie.http_only,
-            #            )
-            if cookie.name == self._session_cookie_name:
+            name = cookie.get_name()
+            if name == self._session_cookie_name:
                 if not self.success:
                     # Only call destroy once
                     self.auth_cookie = cookie
@@ -244,7 +235,9 @@ def parse_args(args=None, prog=None):
 
 
 def print_cookie(server, authcookie):
-    print('{}={}'.format(authcookie.name, authcookie.value))
+    name=authcookie.get_name()
+    value=authcookie.get_value()
+    print(f'{name}={value}')
 
 
 def saml_thread(jobQ, returnQ, closeEvent):

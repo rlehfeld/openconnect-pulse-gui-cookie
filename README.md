@@ -27,7 +27,7 @@ Instruction for specific distros can be found below.
 
 ### Fedora
 
-    sudo yum install python-gi webkit2gtk3 openconnect
+    sudo dnf install python3-gobject webkit2gtk4.1 openconnect
 
 
 ### Arch
