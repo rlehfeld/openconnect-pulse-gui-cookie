@@ -10,81 +10,78 @@
 # See `https://github.com/hardcodes/openconnect-pulse-gui-cookie.git`
 #
 # 2024,2025 - Sven Putze (hardcodes)
+# 2026 - René Lehfeld
 #################################################################################
 #
-# Username for VPN connection, defaults to $USER if empty
-VPN_USER=""
 # URL to use for VPN connection, e.g. https://vpn.yadayada.home.arpa/login
-VPN_URL=""
+VPN_URL="${1}"
 # Number of seconds to sleep after sending SIGINT to openconnect process
 DISCONNECT_DELAY=2
 # Path to openconnect_pulse_gui.py script, see repo:
-PULSE_GUI_SCRIPT="openconnect_pulse_gui.py"
+PULSE_GUI_SCRIPT="$(which openconnect_pulse_gui.py)"
 # Path/filename for PID file, directory will be created if it does not exist
 PID_FILE="${HOME}/.var/run/openconnect.pid"
 # Path to the openconnect command
-OPENCONNECT=$(which openconnect)
+OPENCONNECT="$(which openconnect)"
 # Protocol to use for openconnect
 # One out of nc, pulse, gp, f5, fortinet, array
 PROTOCOL="nc"
 
 yell() { echo "$0: $*" >&2; }
 die() { yell "$*"; exit 111; }
-try() { "$@" || die "cannot $*"; }
+try() { set -euo pipefail; "$@"; }
 
 if [ -z "${VPN_URL}" ];then
-	die "VPN_URL is not set!"
+    die "VPN_URL is not set!"
 fi
 if [ ! -f "${PULSE_GUI_SCRIPT}" ];then
-	die "Cannot find openconnect_pulse_gui.py script!"
+    die "Cannot find openconnect_pulse_gui.py script!"
 fi
 if [ -z "${OPENCONNECT}" ];then
-	die "OPENCONNECT is not set!"
+    die "OPENCONNECT is not set!"
 fi
 if [ ! -x "${OPENCONNECT}" ];then
-	die "${OPENCONNECT} is not executable!"
+    die "${OPENCONNECT} is not executable!"
 fi
 if [ -z "${PID_FILE}" ];then
-	die "PID_FILE is not set!"
-fi
-if [ -z "${VPN_USER}" ];then
-	VPN_USER="${USER}"
+    die "PID_FILE is not set!"
 fi
 
 PID_DIR=$(dirname "${PID_FILE}")
 if [ ! -d "${PID_DIR}" ];then
-	mkdir -p "${PID_DIR}"
+    mkdir -p "${PID_DIR}"
 fi
 
 VPNC_SCRIPT=""
 # FreeBSD uses another path and other Linux distributions may not have the script at all.
 if test $(grep -c -E '^(ID=ubuntu|ID=pop)' /etc/os-release) = "1" && \
    test ! -z "/usr/share/vpnc-scripts/vpnc-script" ;then
-	VPNC_SCRIPT="--script /usr/share/vpnc-scripts/vpnc-script"
+    VPNC_SCRIPT="--script /usr/share/vpnc-scripts/vpnc-script"
 else
-	VPNC_SCRIPT=""
+    VPNC_SCRIPT=""
 fi
 
 if test -f "${PID_FILE}";then
-	# PID_FILE is still present, openconnect may be already running => disconnect.
-	VPN_PID=$(cat "${PID_FILE}")
-	if (ps -p ${VPN_PID} -o command|grep "openconnect" > /dev/null 2>&1);then
-		# The stored PID is really from copenconnect, send SIGINT
-        	echo "Disconnecting from VPN by sending SIGINT to PID ${VPN_PID}, PID_FILE=${PID_FILE}"
-		kill -SIGINT ${VPN_PID}
-		echo "sleeping for ${DISCONNECT_DELAY} seconds"
-		sleep ${DISCONNECT_DELAY}
-	else
-		echo "openconnect VPN process not found, forgot to disconnect?"
-	fi
-	if [ -f "${PID_FILE}" ];then
-		echo "removing PID file"
-		try rm -f "${PID_FILE}"
-	fi
+    # PID_FILE is still present, openconnect may be already running => disconnect.
+    VPN_PID=$(cat "${PID_FILE}")
+    if ps -p ${VPN_PID} -o command | grep -q "openconnect"; then
+        # The stored PID is really from copenconnect, send SIGINT
+        echo "Disconnecting from VPN by sending SIGINT to PID ${VPN_PID}, PID_FILE=${PID_FILE}"
+        kill -SIGINT ${VPN_PID}
+        echo "sleeping for ${DISCONNECT_DELAY} seconds"
+        sleep ${DISCONNECT_DELAY}
+    else
+        echo "openconnect VPN process not found, forgot to disconnect?"
+    fi
+    if [ -f "${PID_FILE}" ];then
+        echo "removing PID file"
+        try rm -f "${PID_FILE}"
+    fi
 else
-	SSO_LOGIN_COOKIE=$(python3 ${PULSE_GUI_SCRIPT} ${VPN_URL})
-	try sudo -p "sudo (openconnect): " ${OPENCONNECT} --background --pid-file="${PID_FILE}" ${VPNC_SCRIPT} --protocol="${PROTOCOL}" --user=${VPN_USER} --setuid=${USER} --cookie="${SSO_LOGIN_COOKIE}" ${VPN_URL}
-        # for UMASK 027
-	try sudo chown root:${USER} ${PID_FILE}
+    SSO_LOGIN_COOKIE=$(${PULSE_GUI_SCRIPT} ${VPN_URL})
+    try sudo -p "sudo (openconnect): " /bin/bash <<EOF
+set -euo pipefail
+${OPENCONNECT} --background --pid-file="${PID_FILE}" ${VPNC_SCRIPT} --protocol="${PROTOCOL}" --setuid="$(id -u)" --cookie-on-stdin "${VPN_URL}" <<< "${SSO_LOGIN_COOKIE}"
+/bin/chown $(id -u):$(id -g) "${PID_FILE}"
+EOF
 fi
-
